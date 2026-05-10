@@ -1,30 +1,34 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { UploadCloud, Camera, X, Image, Clock, CheckCircle, Loader } from 'lucide-react'
 
 const recentMeals = [
   { name: 'Grilled Chicken Bowl', cal: 540, time: '2h ago', emoji: '🍗' },
-  { name: 'Avocado Toast',         cal: 320, time: '8h ago', emoji: '🥑' },
-  { name: 'Protein Smoothie',      cal: 280, time: 'Yesterday', emoji: '🥤' },
-  { name: 'Pasta Primavera',       cal: 620, time: 'Yesterday', emoji: '🍝' },
+  { name: 'Avocado Toast', cal: 320, time: '8h ago', emoji: '🥑' },
+  { name: 'Protein Smoothie', cal: 280, time: 'Yesterday', emoji: '🥤' },
+  { name: 'Pasta Primavera', cal: 620, time: 'Yesterday', emoji: '🍝' },
 ]
 
 const LOADING_STEPS = [
-  { label: 'Uploading image…',       icon: <UploadCloud size={20} /> },
+  { label: 'Uploading image…', icon: <UploadCloud size={20} /> },
   { label: 'Detecting foods with AI…', icon: <Camera size={20} /> },
   { label: 'Calculating nutrition…', icon: <CheckCircle size={20} /> },
 ]
 
 export default function Scan() {
   const navigate = useNavigate()
+  const { token } = useAuth()
   const fileInputRef = useRef()
   const [dragging, setDragging] = useState(false)
   const [preview, setPreview] = useState(null)
   const [loadingStep, setLoadingStep] = useState(null)   // null = idle, 0/1/2 = step index, 'done'
+  const [file, setFile] = useState(null)
   const [mealLabel, setMealLabel] = useState('')
 
   function handleFile(file) {
     if (!file || !file.type.startsWith('image/')) return
+    setFile(file)
     const url = URL.createObjectURL(file)
     setPreview(url)
     setLoadingStep(null)
@@ -36,15 +40,42 @@ export default function Scan() {
     handleFile(e.dataTransfer.files[0])
   }
 
-  function startAnalysis() {
-    if (!preview) return
+  async function startAnalysis() {
+    if (!file) return
     setLoadingStep(0)
-    setTimeout(() => setLoadingStep(1), 1200)
-    setTimeout(() => setLoadingStep(2), 2600)
-    setTimeout(() => {
-      setLoadingStep('done')
-      setTimeout(() => navigate('/results'), 600)
-    }, 4000)
+
+    try {
+      const formData = new FormData()
+      formData.append('image', file)
+      formData.append('goal', 'balanced')
+
+      // Step 1: Uploading
+      setTimeout(() => setLoadingStep(1), 800)
+
+      const response = await fetch('http://127.0.0.1:5000/api/analyze', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      })
+
+      if (!response.ok) throw new Error('Analysis failed')
+
+      const result = await response.json()
+
+      // Step 2: Calculation
+      setLoadingStep(2)
+
+      setTimeout(() => {
+        setLoadingStep('done')
+        setTimeout(() => navigate('/results', { state: { data: result } }), 600)
+      }, 1000)
+
+    } catch (err) {
+      alert("Error connecting to server. Make sure server.py is running.")
+      setLoadingStep(null)
+    }
   }
 
   return (
@@ -119,21 +150,14 @@ export default function Scan() {
             alt="Meal preview"
             style={{ width: '100%', maxHeight: 380, objectFit: 'cover', borderRadius: 'var(--r-md)', marginBottom: '1.25rem' }}
           />
-          <input
-            placeholder="Meal label (optional, e.g. Breakfast)"
-            value={mealLabel}
-            onChange={e => setMealLabel(e.target.value)}
-            style={{
-              width: '100%', padding: '0.75rem 1rem',
-              background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-              borderRadius: 'var(--r-md)', color: 'var(--text-1)',
-              fontSize: '0.9rem', marginBottom: '1rem', outline: 'none',
-              fontFamily: 'var(--font)',
-            }}
-          />
-          <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }} onClick={startAnalysis}>
-            <Loader size={18} /> Analyse Meal
-          </button>
+          <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1.5rem' }}>
+            <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center' }} onClick={startAnalysis}>
+              Analyze Meal
+            </button>
+            <button className="btn btn-secondary" onClick={() => { setFile(null); setPreview(null); }}>
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
@@ -180,24 +204,6 @@ export default function Scan() {
         </div>
       )}
 
-      {/* Recent Meals Strip */}
-      {!preview && (
-        <div style={{ marginTop: '2.5rem' }}>
-          <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1rem' }}>
-            <Clock size={16} color="var(--text-3)" /> Recent Meals
-          </h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(170px, 1fr))', gap: '0.75rem' }}>
-            {recentMeals.map(m => (
-              <div key={m.name} className="card card-hover" style={{ padding: '1rem' }}>
-                <div style={{ fontSize: '1.75rem', marginBottom: '0.5rem' }}>{m.emoji}</div>
-                <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.25rem' }}>{m.name}</div>
-                <div style={{ color: 'var(--accent)', fontSize: '0.8rem', fontWeight: 600 }}>{m.cal} kcal</div>
-                <div style={{ color: 'var(--text-3)', fontSize: '0.75rem', marginTop: '0.25rem' }}>{m.time}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

@@ -1,51 +1,51 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import {
   PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend
 } from 'recharts'
 import {
-  AlertTriangle, Edit2, Check, X, BookOpen, Plus, TrendingUp
+  AlertTriangle, Edit2, Check, X, BookOpen, Plus, TrendingUp, Heart, Loader, Utensils
 } from 'lucide-react'
 
 const mockFoods = [
   { id: 1, name: 'Grilled Chicken Breast', grams: 180, cal: 297, protein: 56, carbs: 0,  fat: 6,  confidence: 97 },
-  { id: 2, name: 'Steamed Brown Rice',     grams: 150, cal: 165, protein: 4,  carbs: 34, fat: 1,  confidence: 91 },
-  { id: 3, name: 'Broccoli Florets',       grams: 90,  cal: 31,  protein: 3,  carbs: 6,  fat: 0,  confidence: 88 },
-  { id: 4, name: 'Olive Oil Drizzle',      grams: 10,  cal: 88,  protein: 0,  carbs: 0,  fat: 10, confidence: 72 },
-]
-
-const warnings = [
-  { label: 'Low Fiber',   type: 'warning', msg: 'Only 4g — aim for 25g+/day.' },
-  { label: 'High Sodium', type: 'danger',  msg: 'Estimated ~820mg — watch your salt intake.' },
-]
-
-const recipes = [
-  {
-    title: 'Chicken & Rice Burrito Bowl',
-    tags: ['High Protein', 'Low Fat'],
-    time: '20 min',
-    cal: 480,
-    emoji: '🌯',
-  },
-  {
-    title: 'Asian Chicken Stir-Fry',
-    tags: ['Balanced', 'Quick'],
-    time: '15 min',
-    cal: 390,
-    emoji: '🥢',
-  },
 ]
 
 const MACRO_COLORS = { protein: '#FF5E3A', carbs: '#3B82F6', fat: '#F59E0B' }
 
 export default function Results() {
   const navigate = useNavigate()
-  const [foods, setFoods]     = useState(mockFoods)
+  const location = useLocation()
+  const { token } = useAuth()
+  const apiData = location.state?.data
+  const [logging, setLogging] = useState(false)
+
+  // Map API data or fallback to mock
+  const [foods, setFoods] = useState(apiData ? [{
+    id: 1,
+    name: apiData.prediction?.food || 'Unknown',
+    grams: 100, 
+    cal: apiData.nutrition?.calories || 0,
+    protein: apiData.nutrition?.protein || 0,
+    carbs: apiData.nutrition?.carbs || 0,
+    fat: apiData.nutrition?.fat || 0,
+    confidence: apiData.prediction?.confidence || 0
+  }] : mockFoods)
+
   const [editId, setEditId]   = useState(null)
   const [editName, setEditName] = useState('')
 
+  const healthData = apiData?.health_score || { score: 70, rating: 'Good', reasons: ['Balanced meal'] }
+  const advice = apiData?.advice || "No advice available."
+
   const totals = foods.reduce(
-    (acc, f) => ({ cal: acc.cal + f.cal, protein: acc.protein + f.protein, carbs: acc.carbs + f.carbs, fat: acc.fat + f.fat }),
+    (acc, f) => ({ 
+      cal: acc.cal + (f.cal || 0), 
+      protein: acc.protein + (f.protein || 0), 
+      carbs: acc.carbs + (f.carbs || 0), 
+      fat: acc.fat + (f.fat || 0) 
+    }),
     { cal: 0, protein: 0, carbs: 0, fat: 0 }
   )
 
@@ -58,9 +58,25 @@ export default function Results() {
   const dailyGoal = 2000
   const pct = Math.min(100, Math.round((totals.cal / dailyGoal) * 100))
 
-  function startEdit(f) { setEditId(f.id); setEditName(f.name) }
-  function saveEdit()   { setFoods(fs => fs.map(f => f.id === editId ? { ...f, name: editName } : f)); setEditId(null) }
-  function removeFood(id) { setFoods(fs => fs.filter(f => f.id !== id)) }
+  async function logMeal() {
+    if (!apiData) return
+    setLogging(true)
+    try {
+      const res = await fetch('http://127.0.0.1:5000/api/meals', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(apiData)
+      })
+      if (res.ok) navigate('/dashboard')
+    } catch (err) {
+      alert("Failed to log meal")
+    } finally {
+      setLogging(false)
+    }
+  }
 
   return (
     <div className="container" style={{ padding: '2.5rem 1.5rem' }}>
@@ -73,8 +89,9 @@ export default function Results() {
           <button className="btn btn-secondary btn-sm" onClick={() => navigate('/scan')}>
             <X size={15} /> Retake
           </button>
-          <button className="btn btn-primary btn-sm" onClick={() => navigate('/dashboard')}>
-            <Check size={15} /> Log This Meal
+          <button className="btn btn-primary btn-sm" onClick={logMeal} disabled={logging}>
+            {logging ? <Loader size={15} className="spin" /> : <Check size={15} />}
+            {logging ? 'Logging...' : 'Log This Meal'}
           </button>
         </div>
       </div>
@@ -85,95 +102,85 @@ export default function Results() {
         {/* ── Left column ───────────────────────────────── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
 
-          {/* Detected foods */}
-          <div className="card">
+          {/* Top AI Match */}
+          <div className="card" style={{ background: 'var(--accent-subtle)', border: '1px solid var(--accent)' }}>
             <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <TrendingUp size={18} color="var(--accent)" /> Detected Foods
+              <TrendingUp size={18} color="var(--accent)" /> Top AI Match
             </h3>
-            {foods.map(f => (
-              <div key={f.id} style={{
-                display: 'flex', alignItems: 'center', gap: '0.75rem',
-                padding: '0.875rem', borderRadius: 'var(--r-md)',
-                background: 'var(--bg-elevated)', marginBottom: '0.5rem',
-              }}>
-                {editId === f.id ? (
-                  <>
-                    <input
-                      value={editName}
-                      onChange={e => setEditName(e.target.value)}
-                      style={{
-                        flex: 1, background: 'var(--bg-base)', border: '1px solid var(--accent)',
-                        borderRadius: 'var(--r-sm)', padding: '0.35rem 0.6rem',
-                        color: 'var(--text-1)', fontFamily: 'var(--font)', outline: 'none',
-                      }}
-                    />
-                    <button className="btn btn-primary btn-sm" onClick={saveEdit}><Check size={14} /></button>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setEditId(null)}><X size={14} /></button>
-                  </>
-                ) : (
-                  <>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 600, marginBottom: '0.15rem' }}>{f.name}</div>
-                      <div style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>
-                        {f.grams}g · {f.cal} kcal · P: {f.protein}g · C: {f.carbs}g · F: {f.fat}g
-                      </div>
-                    </div>
-                    <div className={`badge ${f.confidence >= 90 ? 'badge-success' : f.confidence >= 75 ? 'badge-warning' : 'badge-danger'}`}>
-                      {f.confidence}%
-                    </div>
-                    <button onClick={() => startEdit(f)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)' }}>
-                      <Edit2 size={15} />
-                    </button>
-                    <button onClick={() => removeFood(f.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)' }}>
-                      <X size={15} />
-                    </button>
-                  </>
-                )}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '1rem',
+              padding: '1.25rem', borderRadius: 'var(--r-md)',
+              background: 'var(--bg-elevated)',
+            }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-1)' }}>{foods[0]?.name}</div>
+                <div style={{ color: 'var(--text-3)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
+                  Approx. 100g serving
+                </div>
               </div>
-            ))}
-            <button className="btn btn-ghost btn-sm" style={{ marginTop: '0.5rem', gap: '0.4rem' }}>
-              <Plus size={15} /> Add Item Manually
-            </button>
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginBottom: '0.25rem', fontWeight: 600 }}>CONFIDENCE</div>
+                <div className={`badge ${foods[0]?.confidence >= 90 ? 'badge-success' : 'badge-warning'}`} style={{ fontSize: '1rem', padding: '0.4rem 0.8rem' }}>
+                  {foods[0]?.confidence}%
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* Warnings */}
+          {/* Health Score & Reasons */}
           <div className="card">
             <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <AlertTriangle size={18} color="var(--warning)" /> Health Warnings
+              <Heart size={18} color="#FF5E3A" /> Health Score: {healthData.score}/100
             </h3>
+            <div style={{ marginBottom: '1rem' }}>
+              <span className={`badge ${healthData.score >= 70 ? 'badge-success' : healthData.score >= 50 ? 'badge-warning' : 'badge-danger'}`} style={{ fontSize: '1rem', padding: '0.5rem 1rem' }}>
+                Rating: {healthData.rating}
+              </span>
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-              {warnings.map(w => (
-                <div key={w.label} style={{
-                  display: 'flex', alignItems: 'flex-start', gap: '0.75rem',
+              {healthData.reasons.map(reason => (
+                <div key={reason} style={{
+                  display: 'flex', alignItems: 'center', gap: '0.75rem',
                   padding: '0.875rem', borderRadius: 'var(--r-md)',
-                  background: w.type === 'danger' ? 'rgba(239,68,68,.08)' : 'rgba(245,158,11,.08)',
-                  border: `1px solid ${w.type === 'danger' ? 'rgba(239,68,68,.2)' : 'rgba(245,158,11,.2)'}`,
+                  background: 'var(--bg-elevated)',
+                  border: `1px solid var(--border)`,
                 }}>
-                  <span className={`badge badge-${w.type}`}>{w.label}</span>
-                  <span style={{ color: 'var(--text-2)', fontSize: '0.875rem' }}>{w.msg}</span>
+                  <Check size={16} color="var(--success)" />
+                  <span style={{ color: 'var(--text-2)', fontSize: '0.875rem' }}>{reason}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* AI Recipes */}
+          {/* AI Nutritionist Advice */}
           <div className="card">
             <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <BookOpen size={18} color="var(--accent)" /> AI Recipe Suggestions
+              <BookOpen size={18} color="var(--accent)" /> AI Nutritionist Advice
             </h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-              {recipes.map(r => (
-                <div key={r.title} className="card card-hover" style={{ padding: '1.25rem', background: 'var(--bg-elevated)' }}>
-                  <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>{r.emoji}</div>
-                  <div style={{ fontWeight: 700, marginBottom: '0.5rem', fontSize: '0.925rem' }}>{r.title}</div>
-                  <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-                    {r.tags.map(t => <span key={t} className="badge badge-accent">{t}</span>)}
-                  </div>
-                  <div style={{ color: 'var(--text-3)', fontSize: '0.8rem' }}>⏱ {r.time} · 🔥 {r.cal} kcal</div>
-                </div>
-              ))}
+            <div style={{ 
+              whiteSpace: 'pre-wrap', lineHeight: '1.6', color: 'var(--text-2)', fontSize: '0.95rem',
+              background: 'var(--bg-elevated)', padding: '1.25rem', borderRadius: 'var(--r-md)', border: '1px solid var(--border)'
+            }}>
+              {advice.toLowerCase().includes('part 2') 
+                ? advice.split(/PART 2:|Part 2:|part 2:/i)[0].replace(/PART 1: NUTRITION ADVICE|PART 1:/i, '').trim()
+                : advice}
             </div>
           </div>
+
+          {/* AI Recipe Suggestion */}
+          {advice.toLowerCase().includes('part 2') && (
+            <div className="card" style={{ border: '1px solid var(--success-subtle)', background: 'linear-gradient(to bottom right, var(--bg-surface), rgba(16,185,129,0.03))' }}>
+              <h3 style={{ marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Utensils size={18} color="var(--success)" /> Healthy Recipe Idea
+              </h3>
+              <div style={{ 
+                whiteSpace: 'pre-wrap', lineHeight: '1.6', color: 'var(--text-2)', fontSize: '0.95rem',
+                background: 'var(--bg-elevated)', padding: '1.25rem', borderRadius: 'var(--r-md)', border: '1px solid var(--border)'
+              }}>
+                {advice.split(/PART 2:|Part 2:|part 2:/i)[1]?.replace(/HEALTHY RECIPE|RECIPE/i, '').trim()}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ── Right column ──────────────────────────────── */}

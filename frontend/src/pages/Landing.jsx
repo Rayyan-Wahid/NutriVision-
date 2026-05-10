@@ -105,15 +105,6 @@ export default function Landing() {
             </button>
           </div>
 
-          {/* Stat pills */}
-          <div style={{ display: 'flex', gap: '2rem', justifyContent: 'center', marginTop: '3.5rem', flexWrap: 'wrap' }}>
-            {[['98%', 'Detection accuracy'], ['< 2s', 'Analysis time'], ['200+', 'Food categories']].map(([val, label]) => (
-              <div key={label} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--accent)' }}>{val}</div>
-                <div style={{ fontSize: '0.82rem', color: 'var(--text-3)', marginTop: '0.1rem' }}>{label}</div>
-              </div>
-            ))}
-          </div>
         </div>
       </section>
 

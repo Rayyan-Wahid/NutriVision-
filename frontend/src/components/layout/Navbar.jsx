@@ -1,15 +1,16 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Zap, LayoutDashboard, Camera, User, BarChart2 } from 'lucide-react'
+import { useAuth } from '../../context/AuthContext'
+import { Zap, LayoutDashboard, Camera, User, BarChart2, LogOut, LogIn } from 'lucide-react'
 
 const links = [
   { to: '/dashboard', label: 'Dashboard', icon: <LayoutDashboard size={15} /> },
-  { to: '/scan',      label: 'Scan Meal',  icon: <Camera size={15} /> },
-  { to: '/results',   label: 'Results',   icon: <BarChart2 size={15} /> },
-  { to: '/profile',   label: 'Profile',   icon: <User size={15} /> },
+  { to: '/scan', label: 'Scan Meal', icon: <Camera size={15} /> },
+  { to: '/profile', label: 'Profile', icon: <User size={15} /> },
 ]
 
 export default function Navbar() {
   const navigate = useNavigate()
+  const { isAuthenticated, logout } = useAuth()
 
   return (
     <nav className="navbar">
@@ -17,11 +18,12 @@ export default function Navbar() {
         <div className="nav-logo-icon">
           <Zap size={18} fill="white" />
         </div>
-        Nutri<span style={{ color: 'var(--accent)' }}>Vision</span>
+        <span>Nutri</span>
+        <span style={{ color: 'var(--accent)' }}>Vision</span>
       </NavLink>
 
       <ul className="nav-links">
-        {links.map(l => (
+        {isAuthenticated && links.map(l => (
           <li key={l.to}>
             <NavLink
               to={l.to}
@@ -34,9 +36,15 @@ export default function Navbar() {
         ))}
       </ul>
 
-      <button className="nav-cta" onClick={() => navigate('/scan')}>
-        + Scan Meal
-      </button>
+      {isAuthenticated ? (
+        <button className="nav-cta" onClick={() => { logout(); navigate('/') }} style={{ background: 'var(--bg-elevated)', color: 'var(--text-1)', border: '1px solid var(--border)' }}>
+          <LogOut size={16} /> Logout
+        </button>
+      ) : (
+        <button className="nav-cta" onClick={() => navigate('/auth')}>
+          <LogIn size={16} /> Login
+        </button>
+      )}
     </nav>
   )
 }

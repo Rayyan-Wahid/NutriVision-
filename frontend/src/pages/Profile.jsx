@@ -1,33 +1,50 @@
-import { useState } from 'react'
-import { User, Target, ShieldCheck, Save, Edit2 } from 'lucide-react'
-
-const restrictions = ['Vegan', 'Vegetarian', 'Gluten-Free', 'Dairy-Free', 'Keto', 'Nut-Free', 'Low-Sodium', 'Halal']
+import { useState, useEffect } from 'react'
+import { User, Target, Save, Edit2 } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 export default function Profile() {
-  const [name, setName]         = useState('Alex Johnson')
-  const [goal, setGoal]         = useState('lose')
+  const { token } = useAuth()
+  const [name, setName]         = useState('User')
+  const [goal, setGoal]         = useState('balanced')
   const [calTarget, setCalTarget] = useState(2000)
-  const [protein, setProtein]   = useState(150)
-  const [carbs, setCarbs]       = useState(200)
-  const [fat, setFat]           = useState(65)
-  const [selected, setSelected] = useState(['Halal'])
   const [editing, setEditing]   = useState(false)
   const [saved, setSaved]       = useState(false)
 
-  function toggleRestriction(r) {
-    setSelected(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r])
-  }
+  useEffect(() => {
+    async function fetchProfile() {
+      try {
+        const res = await fetch('http://127.0.0.1:5000/api/profile', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        const data = await res.json()
+        setName(data.name)
+        setGoal(data.goal)
+        setCalTarget(data.daily_goal)
+      } catch (err) { console.error(err) }
+    }
+    fetchProfile()
+  }, [token])
 
-  function handleSave() {
-    setSaved(true)
-    setEditing(false)
-    setTimeout(() => setSaved(false), 2500)
+  async function handleSave() {
+    try {
+      await fetch('http://127.0.0.1:5000/api/profile', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ goal, daily_goal: calTarget })
+      })
+      setSaved(true)
+      setEditing(false)
+      setTimeout(() => setSaved(false), 2500)
+    } catch (err) { alert("Failed to save") }
   }
 
   const goalOptions = [
-    { value: 'lose',     label: 'Lose Weight',   emoji: '📉' },
-    { value: 'maintain', label: 'Maintain',       emoji: '⚖️' },
-    { value: 'gain',     label: 'Gain Muscle',    emoji: '💪' },
+    { value: 'weight_loss',  label: 'Lose Weight',   emoji: '📉' },
+    { value: 'balanced',     label: 'Maintain',       emoji: '⚖️' },
+    { value: 'muscle_gain',  label: 'Gain Muscle',    emoji: '💪' },
   ]
 
   return (
@@ -64,16 +81,8 @@ export default function Profile() {
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-3)', marginBottom: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Display Name</div>
-          {editing ? (
-            <input
-              value={name}
-              onChange={e => setName(e.target.value)}
-              style={{ background: 'var(--bg-elevated)', border: '1px solid var(--accent)', borderRadius: 'var(--r-sm)', padding: '0.5rem 0.75rem', color: 'var(--text-1)', fontFamily: 'var(--font)', fontSize: '1.25rem', fontWeight: 700, outline: 'none', width: '100%' }}
-            />
-          ) : (
-            <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{name}</div>
-          )}
-          <div style={{ color: 'var(--text-3)', fontSize: '0.85rem', marginTop: '0.25rem' }}>Member since May 2026 · 14 meals logged</div>
+          <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{name}</div>
+          <div style={{ color: 'var(--text-3)', fontSize: '0.85rem', marginTop: '0.25rem' }}>Member since May 2026</div>
         </div>
       </div>
 
@@ -107,75 +116,31 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Calorie & Macro targets */}
+      {/* Calorie targets */}
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <h3 style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <Target size={18} color="var(--accent)" /> Daily Targets
+          <Target size={18} color="var(--accent)" /> Daily Target
         </h3>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1rem' }}>
-          {[
-            { label: '🔥 Daily Calorie Target', value: calTarget, setter: setCalTarget, unit: 'kcal', min: 1000, max: 4000 },
-            { label: '🥩 Protein Target',        value: protein,   setter: setProtein,   unit: 'g',    min: 50,   max: 300 },
-            { label: '🍞 Carbohydrates Target',  value: carbs,     setter: setCarbs,     unit: 'g',    min: 50,   max: 500 },
-            { label: '🫒 Fat Target',             value: fat,       setter: setFat,       unit: 'g',    min: 20,   max: 200 },
-          ].map(({ label, value, setter, unit, min, max }) => (
-            <div key={label}>
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginBottom: '0.4rem', fontWeight: 500 }}>{label}</div>
-              {editing ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <input
-                    type="number" min={min} max={max}
-                    value={value}
-                    onChange={e => setter(Number(e.target.value))}
-                    style={{ flex: 1, background: 'var(--bg-elevated)', border: '1px solid var(--accent)', borderRadius: 'var(--r-sm)', padding: '0.5rem 0.75rem', color: 'var(--text-1)', fontFamily: 'var(--font)', fontSize: '1rem', fontWeight: 700, outline: 'none' }}
-                  />
-                  <span style={{ color: 'var(--text-3)', fontSize: '0.85rem' }}>{unit}</span>
-                </div>
-              ) : (
-                <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--accent)' }}>
-                  {value} <span style={{ fontSize: '0.9rem', color: 'var(--text-3)', fontWeight: 400 }}>{unit}</span>
-                </div>
-              )}
-            </div>
-          ))}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(1, 1fr)', gap: '1rem' }}>
+          <div>
+            <div style={{ fontSize: '0.78rem', color: 'var(--text-3)', marginBottom: '0.4rem', fontWeight: 500 }}>🔥 Daily Calorie Target</div>
+            {editing ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <input
+                  type="number" min="1000" max="4000"
+                  value={calTarget}
+                  onChange={e => setCalTarget(Number(e.target.value))}
+                  style={{ flex: 1, background: 'var(--bg-elevated)', border: '1px solid var(--accent)', borderRadius: 'var(--r-sm)', padding: '0.5rem 0.75rem', color: 'var(--text-1)', fontFamily: 'var(--font)', fontSize: '1rem', fontWeight: 700, outline: 'none' }}
+                />
+                <span style={{ color: 'var(--text-3)', fontSize: '0.85rem' }}>kcal</span>
+              </div>
+            ) : (
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--accent)' }}>
+                {calTarget} <span style={{ fontSize: '0.9rem', color: 'var(--text-3)', fontWeight: 400 }}>kcal</span>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
-
-      {/* Dietary Restrictions */}
-      <div className="card">
-        <h3 style={{ marginBottom: '1.25rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <ShieldCheck size={18} color="var(--accent)" /> Dietary Restrictions
-        </h3>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.625rem' }}>
-          {restrictions.map(r => {
-            const on = selected.includes(r)
-            return (
-              <button
-                key={r}
-                onClick={() => editing && toggleRestriction(r)}
-                style={{
-                  padding: '0.4rem 1rem',
-                  borderRadius: 'var(--r-full)',
-                  background: on ? 'var(--accent-subtle)' : 'var(--bg-elevated)',
-                  border: `1.5px solid ${on ? 'var(--accent)' : 'var(--border)'}`,
-                  color: on ? 'var(--accent)' : 'var(--text-2)',
-                  fontSize: '0.85rem',
-                  fontWeight: 600,
-                  cursor: editing ? 'pointer' : 'default',
-                  transition: 'all 0.2s',
-                  fontFamily: 'var(--font)',
-                }}
-              >
-                {r}
-              </button>
-            )
-          })}
-        </div>
-        {!editing && (
-          <p style={{ color: 'var(--text-3)', fontSize: '0.8rem', marginTop: '0.875rem' }}>
-            Click <strong style={{ color: 'var(--text-2)' }}>Edit</strong> above to update your dietary restrictions.
-          </p>
-        )}
       </div>
     </div>
   )
